@@ -19,7 +19,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
 
       - name: Generate Gradle Wrapper
         run: gradle wrapper --gradle-version 8.7
