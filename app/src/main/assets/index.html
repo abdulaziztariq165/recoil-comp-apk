@@ -8,25 +8,31 @@
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; overflow: hidden; }
   
-  /* خلفية شفافة عشان اللعبة تبان واللمس يعدي */
+  /* الخلفية الافتراضية للتطبيق (رمادي غامق) */
   body {
-    background: transparent !important; 
+    background: linear-gradient(180deg, #1a2332 0%, #0d1117 100%) !important; 
     color: #c9d1d9;
     font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
     -webkit-user-select: none; user-select: none;
     touch-action: none; overscroll-behavior: none;
   }
 
-  /* الـ viewport شفاف وبيعدي اللمس للعبة */
   #viewport {
     position: fixed; inset: 0;
-    background: transparent !important;
+    background: transparent; /* شفاف عشان ياخد لون الـ body */
     overflow: hidden;
-    pointer-events: none; /* اللمس يعدي للعبة */
   }
 
-  /* العناصر التفاعلية فقط هي اللي بتستقبل اللمس */
-  #fireBtn, #configFab, #miniPanel, #configPanel {
+  /* كلاس الـ Overlay: بيشتغل أوتوماتيك لما يفتح فوق اللعبة */
+  body.in-overlay {
+    background: transparent !important;
+  }
+  body.in-overlay #viewport {
+    pointer-events: none; /* يخلي اللمس يعدي للعبة */
+  }
+  /* الزراير بس اللي بتستقبل اللمس في وضع الـ Overlay */
+  body.in-overlay #fireBtn, body.in-overlay #configFab, 
+  body.in-overlay #miniPanel, body.in-overlay #configPanel {
     pointer-events: auto;
   }
 
@@ -46,7 +52,7 @@
   }
   #viewport.hide-cross #crosshair { opacity: 0; }
 
-  /* الأزرار */
+  /* الأزرار العائمة */
   #fireBtn {
     position: absolute; width: 96px; height: 96px; border-radius: 50%;
     background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.5);
@@ -105,16 +111,28 @@
   .panelBtn.on { background: rgba(51,255,102,0.45); color: #0d1117; }
   .panelBtn.warn { background: rgba(255,80,80,0.1); border-color: rgba(255,80,80,0.5); color: #ff5050; }
 
+  /* القائمة العائمة (Mini Panel) */
   #miniPanel {
     position: absolute; top: 130px; right: 14px; width: 230px;
     background: rgba(13,17,23,0.96); border: 1px solid rgba(51,255,102,0.55);
     border-radius: 12px; z-index: 90; display: none; direction: ltr; text-align: left;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.55);
   }
   #miniPanel.show { display: block; }
-  #miniPanel .mHead { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid rgba(51,255,102,0.2); font-size: 11px; color: #33ff66; }
+  #miniPanel .mHead { 
+    display: flex; align-items: center; gap: 6px; padding: 8px 10px; 
+    border-bottom: 1px solid rgba(51,255,102,0.2); font-size: 11px; color: #33ff66;
+    cursor: grab; touch-action: none;
+  }
+  #miniPanel .mHead:active { cursor: grabbing; }
   #miniPanel .mHead .grow { flex: 1; }
   .mBtn { width: 28px; height: 28px; border-radius: 6px; background: rgba(51,255,102,0.1); border: 1px solid rgba(51,255,102,0.4); color: #33ff66; }
-  #miniPanel .mBody { padding: 2px 12px 12px; }
+  #miniPanel .mBody { 
+    padding: 2px 12px 12px; 
+    max-height: 60vh; /* تحديد ارتفاع عشان ينزل سكرول */
+    overflow-y: auto; /* تفعيل السكرول */
+    touch-action: pan-y; /* السماح بالسحب لتحت */
+  }
   #miniPanel.collapsed .mBody { display: none; }
 
   #hud {
@@ -143,24 +161,27 @@
   <div id="hud">
     <div class="row"><span class="label">Shots</span><span class="val" id="hudShots">0</span></div>
     <div class="row"><span class="label">Recoil Y</span><span class="val" id="hudY">0.0</span></div>
-    <div class="row"><span class="label">Comp Y</span><span class="val" id="hudComp">0.0</span></div>
     <div class="row"><span class="label">Auto</span><span class="val" id="hudAuto">OFF</span></div>
     <div class="row"><span class="label">Gyro</span><span class="val" id="hudGyro">OFF</span></div>
   </div>
 
   <button id="configFab" aria-label="Settings">⚙</button>
 
+  <!-- القائمة الرئيسية -->
   <div id="configPanel">
     <h3>Recoil Profile</h3>
     <div id="mainSliders"></div>
     <button class="panelBtn" data-toggle="autoComp"></button>
     <button class="panelBtn" data-toggle="cross"></button>
-    <button class="panelBtn" id="btnPip">تفعيل الشاشة العائمة ⧉</button>
-    <button class="panelBtn" id="btnGyro">GYRO AIM: OFF</button>
-    <button class="panelBtn" id="btnMove">وضع النقل / MOVE</button>
-    <button class="panelBtn warn" id="btnHideHud">إخفاء HUD</button>
+    <button class="panelBtn" data-toggle="target"></button>
+    <button class="panelBtn action-btn btn-pip">تفعيل الشاشة العائمة ⧉</button>
+    <button class="panelBtn action-btn btn-gyro">GYRO AIM: OFF</button>
+    <button class="panelBtn action-btn btn-move">وضع النقل / MOVE</button>
+    <button class="panelBtn action-btn btn-reset">إعادة تعيين / RESET</button>
+    <button class="panelBtn warn action-btn btn-hide-hud">إخفاء HUD</button>
   </div>
 
+  <!-- القائمة العائمة -->
   <div id="miniPanel">
     <div class="mHead">
       <span class="grow">⚡ Quick</span>
@@ -172,6 +193,12 @@
       <button class="panelBtn" data-toggle="autoComp"></button>
       <div id="miniSliders"></div>
       <button class="panelBtn" data-toggle="cross"></button>
+      <button class="panelBtn" data-toggle="target"></button>
+      <button class="panelBtn action-btn btn-pip">تفعيل الشاشة العائمة ⧉</button>
+      <button class="panelBtn action-btn btn-gyro">GYRO AIM: OFF</button>
+      <button class="panelBtn action-btn btn-move">وضع النقل / MOVE</button>
+      <button class="panelBtn action-btn btn-reset">إعادة تعيين / RESET</button>
+      <button class="panelBtn warn action-btn btn-hide-hud">إخفاء HUD</button>
     </div>
   </div>
 
@@ -187,11 +214,16 @@
 <script>
 'use strict';
 
+// كشف وضع الـ Overlay (لو شغال من الـ Service)
+if (window.NativeOverlay) {
+    document.body.classList.add('in-overlay');
+}
+
 const state = {
   aimX: 0, aimY: 0, recoilX: 0, recoilY: 0, pendX: 0, pendY: 0, compX: 0, compY: 0,
   noiseX: 0, noiseY: 0, noiseTX: 0, noiseTY: 0, lastNoise: 0, crossX: 0, crossY: 0,
   vPerShot: 6.5, hBias: 0.4, fireInterval: 92, compStrength: 1.0, noiseSigma: 0.6,
-  firing: false, autoComp: false, gyroOn: false, showCross: true, showMini: false,
+  firing: false, autoComp: false, gyroOn: false, showCross: true, showTarget: true, showMini: false,
   lastShot: 0, shots: 0, hits: 0, btnState: 'FREE',
   fireBtnX: 40, fireBtnY: 0, fireBtnSize: 96, dragPtr: null, dragOffsetX: 0, dragOffsetY: 0,
 };
@@ -203,10 +235,6 @@ const configFab = $('configFab'), configPanel = $('configPanel'), mini = $('mini
 let vw = 0, vh = 0, booted = false;
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
-function gaussianNoise(sigma) {
-  let u1 = Math.random(); if (u1 < 1e-6) u1 = 1e-6;
-  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * Math.random()) * sigma;
-}
 
 function crossScreen() {
   return { x: vw / 2 + state.crossX, y: vh / 2 - state.crossY };
@@ -251,7 +279,9 @@ SLIDERS.forEach(d => setParam(d.key, state[d.key]));
 const TOGGLES = {
   autoComp: { label: 'AUTO COMP', get: () => state.autoComp, set: v => state.autoComp = v },
   cross: { label: 'CROSSHAIR', get: () => state.showCross, set: v => { state.showCross = v; viewport.classList.toggle('hide-cross', !v); } },
+  target: { label: 'TARGET', get: () => state.showTarget, set: v => state.showTarget = v },
 };
+
 document.querySelectorAll('[data-toggle]').forEach(b => {
   b.addEventListener('click', () => {
     const t = TOGGLES[b.dataset.toggle];
@@ -308,8 +338,10 @@ function setBtnState(s) {
   state.btnState = s;
   fireBtn.className = 'state-' + s;
   fireBtn.querySelector('.fbLabel').textContent = s;
-  $('btnMove').textContent = s === 'MOVING' ? 'إنهاء النقل / DONE' : 'وضع النقل / MOVE';
-  $('btnMove').classList.toggle('on', s === 'MOVING');
+  document.querySelectorAll('.btn-move').forEach(btn => {
+    btn.textContent = s === 'MOVING' ? 'إنهاء النقل / DONE' : 'وضع النقل / MOVE';
+    btn.classList.toggle('on', s === 'MOVING');
+  });
 }
 
 fireBtn.addEventListener('pointerdown', e => {
@@ -336,69 +368,81 @@ fireBtn.addEventListener('pointermove', e => {
 }));
 $('installBtn').addEventListener('pointerdown', e => { e.stopPropagation(); setBtnState('LOCKED'); });
 
-$('btnMove').addEventListener('click', () => setBtnState(state.btnState === 'MOVING' ? 'FREE' : 'MOVING'));
-$('btnHideHud').addEventListener('click', () => { hud.style.display = hud.style.display === 'none' ? 'block' : 'none'; });
+document.querySelectorAll('.btn-move').forEach(btn => btn.addEventListener('click', () => setBtnState(state.btnState === 'MOVING' ? 'FREE' : 'MOVING')));
+document.querySelectorAll('.btn-hide-hud').forEach(btn => btn.addEventListener('click', () => { hud.style.display = hud.style.display === 'none' ? 'block' : 'none'; }));
+document.querySelectorAll('.btn-reset').forEach(btn => btn.addEventListener('click', () => { Object.assign(state, { aimX: 0, aimY: 0, recoilX: 0, recoilY: 0, pendX: 0, pendY: 0, compX: 0, compY: 0, noiseX: 0, noiseY: 0, shots: 0, hits: 0 }); }));
 
 function closePanel() { configPanel.classList.remove('open'); configFab.classList.remove('open'); }
 configFab.addEventListener('click', () => {
-  const open = configPanel.classList.toggle('open'); configFab.classList.toggle('open', open); closePanel === open ? null : null;
+  const open = configPanel.classList.toggle('open'); configFab.classList.toggle('open', open);
 });
 
-// ==========================================
 // تفعيل الـ Overlay
-// ==========================================
-$('btnPip').addEventListener('click', () => {
+document.querySelectorAll('.btn-pip').forEach(btn => btn.addEventListener('click', () => {
   if (window.AndroidBridge) window.AndroidBridge.startOverlay();
   else alert('هذه الميزة تعمل فقط داخل التطبيق (APK)');
+}));
+
+// القائمة العائمة والسحب
+const mHead = mini.querySelector('.mHead');
+let isDragging = false;
+mHead.addEventListener('pointerdown', e => {
+  if (e.target.closest('button')) return;
+  isDragging = true;
+  const r = mini.getBoundingClientRect();
+  mDrag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+  mHead.setPointerCapture(e.pointerId);
 });
+mHead.addEventListener('pointermove', e => {
+  if (!isDragging) return;
+  mini.style.right = 'auto';
+  mini.style.left = clamp(e.clientX - mDrag.dx, 0, vw - mini.offsetWidth) + 'px';
+  mini.style.top = clamp(e.clientY - mDrag.dy, 0, vh - mini.offsetHeight) + 'px';
+});
+['pointerup', 'pointercancel'].forEach(ev => mHead.addEventListener(ev, () => isDragging = false));
 
-// ==========================================
-// الجيروسكوب (Gyro) - بيحرك اللعبة فعلياً
-// ==========================================
-let gyroBase = null;
-let lastGyroInject = 0;
+$('mPip').addEventListener('click', () => {
+  if (window.AndroidBridge) window.AndroidBridge.startOverlay();
+});
+$('mCollapse').addEventListener('click', () => {
+  const c = mini.classList.toggle('collapsed');
+  $('mCollapse').textContent = c ? '+' : '–';
+});
+$('mClose').addEventListener('click', () => { mini.classList.remove('show'); });
+$('btnPip').addEventListener('click', () => { mini.classList.add('show'); });
 
+// الجيروسكوب
+let gyroBase = null, lastGyroInject = 0;
 function onOrient(e) {
   if (e.beta === null || e.gamma === null) return;
   if (!gyroBase) { gyroBase = { beta: e.beta, gamma: e.gamma }; return; }
-  
   const now = performance.now();
-  // نستخدم Swipe Injection كل 100ms عشان الشل ميعلقش
   if (now - lastGyroInject > 100) {
-    let dX = e.gamma - gyroBase.gamma;
-    let dY = e.beta - gyroBase.beta;
-    
-    // حساسية الجيروسكوب (كل ما الرقم يكبر، الحركة تزيد)
-    const sensitivity = 8;
-    
+    let dX = e.gamma - gyroBase.gamma, dY = e.beta - gyroBase.beta;
     if (Math.abs(dX) > 1 || Math.abs(dY) > 1) {
       if (window.NativeOverlay) {
-        window.NativeOverlay.injectSwipe(
-          Math.round(vw/2), Math.round(vh/2),
-          Math.round(vw/2 + (dX * sensitivity)), Math.round(vh/2 + (dY * sensitivity)),
-          50 // سرعة السحب
-        );
+        window.NativeOverlay.injectSwipe(Math.round(vw/2), Math.round(vh/2), Math.round(vw/2 + (dX * 8)), Math.round(vh/2 + (dY * 8)), 50);
       }
-      gyroBase = { beta: e.beta, gamma: e.gamma }; // تصفير المرجع
-      lastGyroInject = now;
+      gyroBase = { beta: e.beta, gamma: e.gamma }; lastGyroInject = now;
     }
   }
 }
 
-$('btnGyro').addEventListener('click', async () => {
+document.querySelectorAll('.btn-gyro').forEach(btn => btn.addEventListener('click', async () => {
   if (!state.gyroOn) {
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
       try { if ((await DeviceOrientationEvent.requestPermission()) !== 'granted') return; } catch (_) { return; }
     }
-    gyroBase = null; window.addEventListener('deviceorientation', onOrient);
-    state.gyroOn = true;
+    gyroBase = null; window.addEventListener('deviceorientation', onOrient); state.gyroOn = true;
   } else {
     window.removeEventListener('deviceorientation', onOrient); state.gyroOn = false;
   }
-  $('btnGyro').textContent = 'GYRO AIM: ' + (state.gyroOn ? 'ON' : 'OFF');
-  $('btnGyro').classList.toggle('on', state.gyroOn);
+  document.querySelectorAll('.btn-gyro').forEach(b => {
+    b.textContent = 'GYRO AIM: ' + (state.gyroOn ? 'ON' : 'OFF');
+    b.classList.toggle('on', state.gyroOn);
+  });
   $('hudGyro').textContent = state.gyroOn ? 'ON' : 'OFF';
-});
+}));
 
 function boot() {
   if (booted) return; booted = true;
