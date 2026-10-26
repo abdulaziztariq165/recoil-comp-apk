@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Alpha Recoil Simulator — v3</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    background: #0d1117; color: #c9d1d9;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none; overscroll-behavior: none;
+  }
+
+  #viewport {
+    position: fixed; inset: 0;
+    background: linear-gradient(180deg, #1a2332 0%, #0d1117 100%);
+    overflow: hidden; touch-action: none;
+  }
+
+  /* Crosshair (يمكن إخفاؤه مع بقاء الحساب يعمل) */
+  #crosshair {
+    position: absolute; width: 40px; height: 40px;
+    transform: translate(-50%, -50%);
+    pointer-events: none; z-index: 10;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: #33ff66;
+    box-shadow: 0 0 6px #33ff66;
+  }
+  #crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
+  #crosshair::after { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); }
+  #crosshair .dot {
+    position: absolute; left: 50%; top: 50%;
+    width: 4px; height: 4px; background: #33ff66;
+    border-radius: 50%; transform: translate(-50%, -50%);
+    box-shadow: 0 0 8px #33ff66;
+  }
+  #viewport.hide-cross #crosshair { opacity: 0; }
+
+  /* Target (يمكن إخفاؤه مع بقاء كشف الإصابة يعمل) */
+  .target {
+    position: absolute; width: 80px; height: 80px;
+    transform: translate(-50%, -50%);
+    border: 2px solid #ff3355; border-radius: 50%;
+    opacity: 0.6; pointer-events: none;
+  }
+  .target::after {
+    content: ''; position: absolute; inset: 30%;
+    background: #ff3355; border-radius: 50%;
+  }
+  #viewport.hide-target .target { opacity: 0; }
+
+  /* Shot marks */
+  .hit, .miss {
+    position: absolute; border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none; z-index: 5;
+  }
+  .hit { width: 8px; height: 8px; background: #33ff66; animation: hitFade 0.8s ease-out forwards; }
+  .miss { width: 4px; height: 4px; background: #8b949e; animation: missFade 0.6s ease-out forwards; }
+  @keyframes hitFade {
+    from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    to { opacity: 0; transform: translate(-50%, -50%) scale(2.5); }
+  }
+  @keyframes missFade { from { opacity: 0.8; } to { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .hit, .miss { animation-duration: 0.01s; } }
+
+  /* ==========================================================
+     Fire button — draggable, states: FREE / MOVING / LOCKED
+     ========================================================== */
+  #fireBtn {
+    position: absolute;
+    width: 96px; height: 96px; border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.5);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-size: 28px; color: #fff; padding: 0;
+    z-index: 20;
+    transition: background 0.08s, border-color 0.08s, transform 0.08s, box-shadow 0.15s;
+    touch-action: none;
+  }
+  #fireBtn .fbLabel {
+    font-size: 9px; margin-top: 2px;
+    letter-spacing: 1px; font-weight: 600; opacity: 0.85;
+  }
+  #fireBtn.state-FREE {
+    background: rgba(255,180,0,0.18);
+    border-color: rgba(255,180,0,0.7);
+    box-shadow: 0 0 12px rgba(255,180,0,0.3);
+  }
+  #fireBtn.state-FREE .fbLabel { color: #ffb400; }
+  #fireBtn.state-MOVING {
+    background: rgba(51,153,255,0.22);
+    border: 2px dashed rgba(51,153,255,0.9);
+    box-shadow: 0 0 18px rgba(51,153,255,0.5);
+    cursor: grab;
+  }
+  #fireBtn.state-MOVING .fbLabel { color: #3399ff; }
+  #fireBtn.state-LOCKED {
+    background: rgba(51,255,102,0.18);
+    border-color: rgba(51,255,102,0.8);
+  }
+  #fireBtn.state-LOCKED .fbLabel { color: #33ff66; }
+  #fireBtn.firing {
+    background: rgba(51,255,102,0.85) !important;
+    border-color: #00aa33 !important;
+    color: #0d1117;
+    transform: scale(0.94);
+    box-shadow: 0 0 24px rgba(51,255,102,0.7);
+  }
+
+  #installBtn {
+    position: absolute; top: -48px; left: 50%;
+    transform: translateX(-50%);
+    display: none; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: 20px;
+    background: rgba(51,153,255,0.92);
+    border: 2px solid #3399ff;
+    color: #fff; font: inherit; font-size: 12px; font-weight: 700;
+    white-space: nowrap; cursor: pointer; z-index: 25;
+  }
+  #fireBtn.pill-below #installBtn { top: auto; bottom: -48px; }
+  #fireBtn.state-MOVING #installBtn { display: flex; }
+
+  /* ==========================================================
+     Floating Config Orb (FAB) + main panel
+     ========================================================== */
+  #configFab {
+    position: absolute; top: 14px; left: 14px;
+    width: 48px; height: 48px; border-radius: 50%;
+    background: rgba(51,255,102,0.15);
+    border: 2px solid rgba(51,255,102,0.7);
+    color: #33ff66; font-size: 22px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; cursor: pointer;
+    box-shadow: 0 0 12px rgba(51,255,102,0.35);
+    transition: transform 0.15s, background 0.15s;
+  }
+  #configFab:active { transform: scale(0.92); }
+  #configFab.open { background: rgba(51,255,102,0.55); color: #0d1117; transform: rotate(45deg); }
+
+  #configPanel {
+    position: absolute; top: 72px; left: 14px;
+    width: min(270px, calc(100vw - 28px));
+    max-height: calc(100vh - 90px); max-height: calc(100dvh - 90px);
+    overflow-y: auto; touch-action: pan-y;
+    background: rgba(13,17,23,0.95);
+    border: 1px solid rgba(51,255,102,0.4);
+    border-radius: 10px; padding: 14px;
+    z-index: 99;
+    direction: ltr; text-align: left;
+    transform-origin: top left;
+    transform: scale(0.85) translateY(-8px);
+    opacity: 0; pointer-events: none; visibility: hidden;
+    transition: transform 0.18s ease-out, opacity 0.18s ease-out, visibility 0.18s;
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  }
+  #configPanel.open {
+    transform: scale(1) translateY(0);
+    opacity: 1; pointer-events: auto; visibility: visible;
+  }
+  #configPanel h3 {
+    font-size: 11px; color: #33ff66;
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 4px; border-bottom: 1px solid rgba(51,255,102,0.2);
+    padding-bottom: 6px;
+  }
+
+  /* Shared slider rows (main panel + floating mini panel) */
+  .slrow label { display: block; font-size: 11px; color: #8b949e; margin-top: 10px; margin-bottom: 3px; }
+  .slrow input[type=range] {
+    width: 100%; height: 24px;
+    -webkit-appearance: none; appearance: none; background: transparent;
+  }
+  .slrow input[type=range]::-webkit-slider-runnable-track { height: 4px; background: #30363d; border-radius: 2px; }
+  .slrow input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 16px; height: 16px;
+    background: #33ff66; border-radius: 50%; margin-top: -6px;
+    box-shadow: 0 0 6px rgba(51,255,102,0.6);
+  }
+  .slrow input[type=range]::-moz-range-track { height: 4px; background: #30363d; border-radius: 2px; }
+  .slrow input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border: 0; background: #33ff66; border-radius: 50%; }
+  .slrow .val { color: #33ff66; font-family: monospace; float: right; font-size: 11px; }
+  .slrow input[type=range]:focus-visible, .panelBtn:focus-visible, .mBtn:focus-visible,
+  #configFab:focus-visible, #fireBtn:focus-visible, #installBtn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+  .panelBtn {
+    display: block; width: 100%; margin-top: 10px;
+    padding: 9px 10px; border-radius: 6px;
+    font: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+    cursor: pointer; border: 1px solid;
+    background: rgba(51,255,102,0.1);
+    border-color: rgba(51,255,102,0.5);
+    color: #33ff66;
+    transition: background 0.12s;
+  }
+  .panelBtn:active { background: rgba(51,255,102,0.3); }
+  .panelBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .panelBtn.warn { background: rgba(255,80,80,0.1); border-color: rgba(255,80,80,0.5); color: #ff5050; }
+  .panelBtn.on { background: rgba(51,255,102,0.45); color: #0d1117; }
+
+  /* ==========================================================
+     Floating mini panel (قابلة للسحب، وتُنقل لنافذة منفصلة)
+     ========================================================== */
+  #miniPanel {
+    position: absolute; top: 130px; right: 14px;
+    width: 230px;
+    background: rgba(13,17,23,0.96);
+    border: 1px solid rgba(51,255,102,0.55);
+    border-radius: 12px;
+    z-index: 90; display: none;
+    direction: ltr; text-align: left;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.55);
+  }
+  #miniPanel.show { display: block; }
+  #miniPanel .mHead {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px; cursor: grab; touch-action: none;
+    border-bottom: 1px solid rgba(51,255,102,0.2);
+    font-size: 11px; color: #33ff66; letter-spacing: 1px; text-transform: uppercase;
+  }
+  #miniPanel .mHead .grow { flex: 1; }
+  .mBtn {
+    width: 28px; height: 28px; border-radius: 6px; padding: 0;
+    background: rgba(51,255,102,0.1);
+    border: 1px solid rgba(51,255,102,0.4);
+    color: #33ff66; font-size: 14px; cursor: pointer;
+  }
+  #miniPanel .mBody { padding: 2px 12px 12px; touch-action: pan-y; }
+  #miniPanel.collapsed .mBody { display: none; }
+  #miniPanel.in-pip {
+    position: static; display: block; width: 100%; height: 100vh;
+    border: 0; border-radius: 0; box-shadow: none; overflow-y: auto;
+  }
+  #miniPanel.in-pip .mHead { cursor: default; }
+  #miniPanel.in-pip .mCollapse, #miniPanel.in-pip .mClose { display: none; }
+  #miniPanel.in-pip.collapsed .mBody { display: block; }
+
+  /* HUD */
+  #hud {
+    position: absolute; top: 14px; right: 14px;
+    background: rgba(0,0,0,0.6);
+    padding: 10px 14px; border-radius: 8px;
+    font-size: 11px; font-family: "SF Mono", Menlo, monospace;
+    line-height: 1.5; direction: ltr; text-align: left;
+    z-index: 30; min-width: 160px;
+    border: 1px solid rgba(51,255,102,0.3);
+    transition: opacity 0.2s; pointer-events: none;
+  }
+  #hud.hidden { opacity: 0; }
+  #hud .row { display: flex; justify-content: space-between; gap: 10px; }
+  #hud .label { color: #8b949e; }
+  #hud .val { color: #33ff66; font-weight: 600; }
+
+  /* Hint */
+  #hint {
+    position: absolute; bottom: 14px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.75);
+    padding: 6px 14px; border-radius: 20px;
+    font-size: 11px; color: #a3aebb; text-align: center;
+    max-width: min(90vw, 460px);
+    z-index: 95; pointer-events: none;
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: opacity 0.3s;
+  }
+</style>
+</head>
+<body>
+
+<div id="viewport">
+  <div id="crosshair"><div class="dot"></div></div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="row"><span class="label">Shots</span><span class="val" id="hudShots">0</span></div>
+    <div class="row"><span class="label">Recoil Y</span><span class="val" id="hudY">0.0</span></div>
+    <div class="row"><span class="label">Comp Y</span><span class="val" id="hudComp">0.0</span></div>
+    <div class="row"><span class="label">Net Y</span><span class="val" id="hudNet">0.0</span></div>
+    <div class="row"><span class="label">Accuracy</span><span class="val" id="hudAcc">—</span></div>
+    <div class="row"><span class="label">Auto</span><span class="val" id="hudAuto">OFF</span></div>
+    <div class="row"><span class="label">Button</span><span class="val" id="hudBtnState">FREE</span></div>
+  </div>
+
+  <!-- Floating Config Orb -->
+  <button id="configFab" aria-label="Settings" aria-expanded="false">⚙</button>
+
+  <!-- Main config panel -->
+  <div id="configPanel">
+    <h3>Recoil Profile</h3>
+    <div id="mainSliders"></div>
+
+    <button class="panelBtn" data-toggle="autoComp"></button>
+    <button class="panelBtn" data-toggle="cross"></button>
+    <button class="panelBtn" data-toggle="target"></button>
+    <button class="panelBtn" data-toggle="float"></button>
+    <button class="panelBtn" id="btnPip">نافذة منفصلة / POP OUT ⧉</button>
+    <button class="panelBtn" id="btnGyro">GYRO AIM: OFF</button>
+    <button class="panelBtn" id="btnMove">وضع النقل / MOVE</button>
+    <button class="panelBtn" id="btnReset">إعادة تعيين / RESET</button>
+    <button class="panelBtn warn" id="btnHideHud">إخفاء HUD</button>
+  </div>
+
+  <!-- Floating quick panel -->
+  <div id="miniPanel" role="dialog" aria-label="Quick settings">
+    <div class="mHead">
+      <span class="grow">⚡ Quick</span>
+      <button class="mBtn" id="mPip" title="Pop out" aria-label="Pop out">⧉</button>
+      <button class="mBtn mCollapse" id="mCollapse" title="Collapse" aria-label="Collapse">–</button>
+      <button class="mBtn mClose" id="mClose" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div class="mBody">
+      <button class="panelBtn" data-toggle="autoComp"></button>
+      <div id="miniSliders"></div>
+      <button class="panelBtn" data-toggle="cross"></button>
+      <button class="panelBtn" data-toggle="target"></button>
+    </div>
+  </div>
+
+  <!-- Fire Button (draggable, 3-state) -->
+  <div id="fireBtn" class="state-FREE" role="button" tabindex="0" aria-label="Fire">
+    <span class="fbIcon">🔥</span>
+    <span class="fbLabel">FREE</span>
+    <button type="button" id="installBtn">📌 تثبيت</button>
+  </div>
+
+  <div id="hint">اضغط ⚙ لفتح الإعدادات — زر 🔥 حركه ثم ثبته</div>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================
+// State  (Y axis: positive = up)
+// ============================================================
+const state = {
+  aimX: 0, aimY: 0, gyroX: 0, gyroY: 0,
+
+  recoilX: 0, recoilY: 0,
+  pendX: 0, pendY: 0,
+  compX: 0, compY: 0,
+  noiseX: 0, noiseY: 0, noiseTX: 0, noiseTY: 0, lastNoise: 0,
+
+  crossX: 0, crossY: 0,
+
+  vPerShot: 6.5, hBias: 0.4, fireInterval: 92, compStrength: 1.0, noiseSigma: 0.6,
+
+  firing: false, autoComp: false, gyroOn: false,
+  showCross: true, showTarget: true, showMini: false,
+  lastShot: 0, shots: 0, hits: 0,
+
+  btnState: 'FREE',
+  fireBtnX: 0, fireBtnY: 0, fireBtnSize: 96,
+  dragPtr: null, dragOffsetX: 0, dragOffsetY: 0,
+};
+
+const $ = id => document.getElementById(id);
+const viewport = $('viewport');
+const crosshair = $('crosshair');
+const fireBtn = $('fireBtn');
+const installBtn = $('installBtn');
+const configFab = $('configFab');
+const configPanel = $('configPanel');
+const mini = $('miniPanel');
+const hud = $('hud');
+const hint = $('hint');
+
+let vw = 0, vh = 0, booted = false, hintTimer = null, pipWin = null;
+
+// ============================================================
+// Helpers
+// ============================================================
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+function gaussianNoise(sigma) {
+  let u1 = Math.random(); if (u1 < 1e-6) u1 = 1e-6;
+  const u2 = Math.random();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2) * sigma;
+}
+function crossScreen() {
+  return {
+    x: vw / 2 + clamp(state.crossX, -vw / 2, vw / 2),
+    y: vh / 2 - clamp(state.crossY, -vh / 2, vh / 2),
+  };
+}
+function renderCrosshair() {
+  const p = crossScreen();
+  crosshair.style.left = p.x + 'px';
+  crosshair.style.top = p.y + 'px';
+}
+function showHint(text, ms) {
+  clearTimeout(hintTimer);
+  hint.textContent = text;
+  hint.style.opacity = '1';
+  if (ms) hintTimer = setTimeout(() => { hint.style.opacity = '0'; }, ms);
+}
+
+// ============================================================
+// Sliders (built once, shared by the main panel and the mini panel)
+// ============================================================
+const SLIDERS = [
+  { key: 'vPerShot',     label: 'Vertical / shot',        min: 0,  max: 20,  step: 0.5,  dec: 1 },
+  { key: 'hBias',        label: 'Horizontal bias',        min: -3, max: 3,   step: 0.1,  dec: 1 },
+  { key: 'fireInterval', label: 'Fire interval (ms)',     min: 40, max: 200, step: 2,    dec: 0 },
+  { key: 'compStrength', label: 'Compensation strength',  min: 0,  max: 1.5, step: 0.05, dec: 2 },
+  { key: 'noiseSigma',   label: 'Noise sigma (px)',       min: 0,  max: 3,   step: 0.1,  dec: 1 },
+];
+const sliderEls = {};
+
+function setParam(key, v) {
+  state[key] = v;
+  const d = SLIDERS.find(s => s.key === key);
+  for (const e of sliderEls[key]) {
+    e.input.value = v;
+    e.val.textContent = v.toFixed(d.dec);
+  }
+}
+function buildSliders(container, prefix) {
+  for (const d of SLIDERS) {
+    const row = document.createElement('div');
+    row.className = 'slrow';
+    const id = prefix + d.key;
+    const label = document.createElement('label');
+    label.htmlFor = id;
+    label.appendChild(document.createTextNode(d.label + ' '));
+    const val = document.createElement('span');
+    val.className = 'val';
+    label.appendChild(val);
+    const input = document.createElement('input');
+    input.type = 'range'; input.id = id;
+    input.min = d.min; input.max = d.max; input.step = d.step;
+    row.appendChild(label); row.appendChild(input);
+    container.appendChild(row);
+    if (!sliderEls[d.key]) sliderEls[d.key] = [];
+    sliderEls[d.key].push({ input, val });
+    input.addEventListener('input', () => setParam(d.key, parseFloat(input.value)));
+  }
+}
+buildSliders($('mainSliders'), 'main-');
+buildSliders($('miniSliders'), 'mini-');
+SLIDERS.forEach(d => setParam(d.key, state[d.key]));
+
+// ============================================================
+// Toggles (one definition, any number of buttons)
+// ============================================================
+const TOGGLES = {
+  autoComp: {
+    label: 'AUTO COMP',
+    get: () => state.autoComp,
+    set: v => { state.autoComp = v; },
+  },
+  cross: {
+    label: 'المؤشر / CROSSHAIR',
+    get: () => state.showCross,
+    set: v => { state.showCross = v; viewport.classList.toggle('hide-cross', !v); },
+  },
+  target: {
+    label: 'الهدف / TARGET',
+    get: () => state.showTarget,
+    set: v => { state.showTarget = v; viewport.classList.toggle('hide-target', !v); },
+  },
+  float: {
+    label: 'الزر العائم / FLOAT PANEL',
+    get: () => state.showMini,
+    set: v => {
+      state.showMini = v;
+      mini.classList.toggle('show', v);
+      if (!v && pipWin) pipWin.close();
+    },
+  },
+};
+const toggleBtns = Array.from(document.querySelectorAll('[data-toggle]'));
+function refreshToggles() {
+  for (const b of toggleBtns) {
+    const t = TOGGLES[b.dataset.toggle];
+    const on = t.get();
+    b.textContent = t.label + ': ' + (on ? 'ON' : 'OFF');
+    b.classList.toggle('on', on);
+  }
+  $('hudAuto').textContent = state.autoComp ? 'ON' : 'OFF';
+}
+for (const b of toggleBtns) {
+  b.addEventListener('click', () => {
+    const t = TOGGLES[b.dataset.toggle];
+    t.set(!t.get());
+    refreshToggles();
+    if (b.dataset.toggle === 'float' && state.showMini) clampMini();
+  });
+}
+refreshToggles();
+
+// ============================================================
+// Layout
+// ============================================================
+function applyFireBtnPosition() {
+  fireBtn.style.left = state.fireBtnX + 'px';
+  fireBtn.style.top = state.fireBtnY + 'px';
+  fireBtn.classList.toggle('pill-below', state.fireBtnY < 60);
+}
+function clampMini() {
+  if (mini.classList.contains('in-pip') || !mini.style.left) return;
+  mini.style.left = clamp(mini.offsetLeft, 0, Math.max(0, vw - mini.offsetWidth)) + 'px';
+  mini.style.top = clamp(mini.offsetTop, 0, Math.max(0, vh - mini.offsetHeight)) + 'px';
+}
+function resize() {
+  vw = viewport.clientWidth;
+  vh = viewport.clientHeight;
+  if (!booted) return;
+  state.fireBtnX = clamp(state.fireBtnX, 0, Math.max(0, vw - state.fireBtnSize));
+  state.fireBtnY = clamp(state.fireBtnY, 0, Math.max(0, vh - state.fireBtnSize));
+  applyFireBtnPosition();
+  clampMini();
+  const t = document.querySelector('.target');
+  if (t) moveTarget(t);
+  renderCrosshair();
+}
+window.addEventListener('resize', resize);
+
+// ============================================================
+// Targets and marks
+// ============================================================
+function moveTarget(t) {
+  const m = Math.min(100, vw * 0.2, vh * 0.2);
+  t.style.left = (m + Math.random() * Math.max(0, vw - m * 2)) + 'px';
+  t.style.top = (m + Math.random() * Math.max(0, vh * 0.6 - m)) + 'px';
+}
+function spawnTarget() {
+  const t = document.createElement('div');
+  t.className = 'target';
+  viewport.appendChild(t);
+  moveTarget(t);
+}
+function spawnMark(x, y, isHit) {
+  const m = document.createElement('div');
+  m.className = isHit ? 'hit' : 'miss';
+  m.style.left = x + 'px';
+  m.style.top = y + 'px';
+  viewport.appendChild(m);
+  setTimeout(() => m.remove(), 800);
+}
+
+// ============================================================
+// Firing
+// ============================================================
+function fireOneShot() {
+  // The bullet goes where the crosshair is at trigger pull; the kick comes after.
+  // Works the same whether the crosshair / target are visible or hidden.
+  const p = crossScreen();
+  state.shots++;
+  let hit = false;
+  for (const t of document.querySelectorAll('.target')) {
+    const r = t.getBoundingClientRect();
+    if (Math.hypot(p.x - (r.left + r.width / 2), p.y - (r.top + r.height / 2)) <= r.width / 2) {
+      hit = true; state.hits++; moveTarget(t); break;
+    }
+  }
+  spawnMark(p.x, p.y, hit);
+  state.pendY += state.vPerShot;
+  state.pendX += state.hBias;
+}
+
+const fireSources = new Set();
+function startFiring() {
+  if (state.btnState !== 'LOCKED' || state.firing) return;
+  state.firing = true;
+  state.lastShot = performance.now() - state.fireInterval;
+  state.lastNoise = 0;
+  fireBtn.classList.add('firing');
+  if (!document.querySelector('.target')) spawnTarget();
+}
+function stopFiring() {
+  if (!state.firing) return;
+  state.firing = false;
+  fireBtn.classList.remove('firing');
+}
+function addSource(id) { fireSources.add(id); startFiring(); }
+function removeSource(id) { fireSources.delete(id); if (fireSources.size === 0) stopFiring(); }
+
+// ============================================================
+// Main loop
+// ============================================================
+let lastFrame = performance.now();
+function loop(now) {
+  const dt = clamp(now - lastFrame, 0, 50);
+  lastFrame = now;
+
+  if (state.firing) {
+    let n = 0;
+    while (now - state.lastShot >= state.fireInterval && n < 5) {
+      state.lastShot += state.fireInterval;
+      fireOneShot();
+      n++;
+    }
+    if (n === 5) state.lastShot = now;
+  }
+
+  const kf = 1 - Math.exp(-dt / 40);
+  const kx = state.pendX * kf, ky = state.pendY * kf;
+  state.pendX -= kx; state.pendY -= ky;
+  state.recoilX += kx; state.recoilY += ky;
+
+  if (state.firing && state.autoComp) {
+    const rate = (state.compStrength * dt) / state.fireInterval;
+    state.compY -= state.vPerShot * rate;
+    state.compX -= state.hBias * rate;
+  }
+
+  const decay = Math.exp(-dt / 200);
+  if (!state.firing) {
+    state.recoilX *= decay; state.recoilY *= decay;
+    state.compX *= decay; state.compY *= decay;
+  } else if (!state.autoComp) {
+    state.compX *= decay; state.compY *= decay;
+  }
+
+  if (now - state.lastNoise >= 45) {
+    state.lastNoise = now;
+    const on = state.autoComp && state.firing;
+    state.noiseTX = on ? gaussianNoise(state.noiseSigma) : 0;
+    state.noiseTY = on ? gaussianNoise(state.noiseSigma) : 0;
+  }
+  const nf = 1 - Math.exp(-dt / 30);
+  state.noiseX += (state.noiseTX - state.noiseX) * nf;
+  state.noiseY += (state.noiseTY - state.noiseY) * nf;
+
+  state.crossX = state.aimX + state.gyroX + state.recoilX + state.compX + state.noiseX;
+  state.crossY = state.aimY + state.gyroY + state.recoilY + state.compY + state.noiseY;
+
+  renderCrosshair();
+  updateHUD();
+  requestAnimationFrame(loop);
+}
+
+// ============================================================
+// Fire button state machine
+// ============================================================
+function setBtnState(s) {
+  state.btnState = s;
+  if (s !== 'LOCKED') { fireSources.clear(); stopFiring(); }
+  fireBtn.classList.remove('state-FREE', 'state-MOVING', 'state-LOCKED');
+  fireBtn.classList.add('state-' + s);
+  fireBtn.querySelector('.fbLabel').textContent = s;
+  $('hudBtnState').textContent = s;
+
+  const btnMove = $('btnMove');
+  btnMove.classList.toggle('on', s === 'MOVING');
+  btnMove.textContent = s === 'MOVING' ? 'إنهاء النقل / DONE MOVING' : 'وضع النقل / MOVE';
+  if (s === 'MOVING') showHint('اسحب الزر 🔥 إلى مكانه — ثم اضغط "تثبيت" فوقه', 0);
+  else if (s === 'LOCKED') showHint('الزر مثبّت — اضغط مطولاً على 🔥 للإطلاق (أو مفتاح المسافة)', 3000);
+  else showHint('الزر حر — اضغط "وضع النقل" لتحريكه ثم تثبيته', 0);
+}
+
+function installFireBtn() {
+  if (state.btnState !== 'MOVING') return;
+  state.dragPtr = null;
+  setBtnState('LOCKED');
+  fireBtn.style.transform = 'scale(1.15)';
+  setTimeout(() => { fireBtn.style.transform = ''; }, 150);
+}
+
+// ============================================================
+// Input: fire button
+// ============================================================
+fireBtn.addEventListener('pointerdown', e => {
+  if (installBtn.contains(e.target)) return;
+  e.preventDefault();
+  if (state.btnState === 'MOVING') {
+    if (state.dragPtr !== null) return;
+    state.dragPtr = e.pointerId;
+    const r = fireBtn.getBoundingClientRect();
+    state.dragOffsetX = e.clientX - r.left;
+    state.dragOffsetY = e.clientY - r.top;
+    try { fireBtn.setPointerCapture(e.pointerId); } catch (_) {}
+  } else if (state.btnState === 'LOCKED') {
+    try { fireBtn.setPointerCapture(e.pointerId); } catch (_) {}
+    addSource('p' + e.pointerId);
+  }
+});
+fireBtn.addEventListener('pointermove', e => {
+  if (e.pointerId !== state.dragPtr || state.btnState !== 'MOVING') return;
+  e.preventDefault();
+  state.fireBtnX = clamp(e.clientX - state.dragOffsetX, 0, Math.max(0, vw - state.fireBtnSize));
+  state.fireBtnY = clamp(e.clientY - state.dragOffsetY, 0, Math.max(0, vh - state.fireBtnSize));
+  applyFireBtnPosition();
+});
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev =>
+  fireBtn.addEventListener(ev, e => {
+    if (e.pointerId === state.dragPtr) state.dragPtr = null;
+    removeSource('p' + e.pointerId);
+  }));
+fireBtn.addEventListener('contextmenu', e => e.preventDefault());
+
+installBtn.addEventListener('pointerdown', e => {
+  e.preventDefault(); e.stopPropagation();
+  installFireBtn();
+});
+
+window.addEventListener('keydown', e => {
+  if (e.code !== 'Space' || e.repeat) return;
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) return;
+  e.preventDefault();
+  addSource('key');
+});
+window.addEventListener('keyup', e => { if (e.code === 'Space') removeSource('key'); });
+window.addEventListener('blur', () => { fireSources.clear(); stopFiring(); });
+
+// ============================================================
+// Aim by dragging the background (also closes the main panel)
+// ============================================================
+let aimPtr = null, lastPX = 0, lastPY = 0;
+viewport.addEventListener('pointerdown', e => {
+  if (e.target.closest('#configPanel, #configFab, #fireBtn, #miniPanel')) return;
+  closePanel();
+  if (aimPtr !== null) return;
+  aimPtr = e.pointerId; lastPX = e.clientX; lastPY = e.clientY;
+  try { viewport.setPointerCapture(e.pointerId); } catch (_) {}
+});
+viewport.addEventListener('pointermove', e => {
+  if (e.pointerId !== aimPtr) return;
+  state.aimX = clamp(state.aimX + (e.clientX - lastPX), -vw / 2, vw / 2);
+  state.aimY = clamp(state.aimY - (e.clientY - lastPY), -vh / 2, vh / 2);
+  lastPX = e.clientX; lastPY = e.clientY;
+});
+['pointerup', 'pointercancel'].forEach(ev =>
+  viewport.addEventListener(ev, e => { if (e.pointerId === aimPtr) aimPtr = null; }));
+
+// ============================================================
+// Config FAB + main panel
+// ============================================================
+function closePanel() {
+  configPanel.classList.remove('open');
+  configFab.classList.remove('open');
+  configFab.setAttribute('aria-expanded', 'false');
+}
+configFab.addEventListener('click', () => {
+  const open = configPanel.classList.toggle('open');
+  configFab.classList.toggle('open', open);
+  configFab.setAttribute('aria-expanded', String(open));
+});
+
+$('btnMove').addEventListener('click', () => {
+  setBtnState(state.btnState === 'MOVING' ? 'FREE' : 'MOVING');
+});
+$('btnReset').addEventListener('click', () => {
+  Object.assign(state, {
+    aimX: 0, aimY: 0, recoilX: 0, recoilY: 0, pendX: 0, pendY: 0,
+    compX: 0, compY: 0, noiseX: 0, noiseY: 0, noiseTX: 0, noiseTY: 0,
+    shots: 0, hits: 0,
+  });
+  gyroBase = null;
+});
+$('btnHideHud').addEventListener('click', () => {
+  const hidden = hud.classList.toggle('hidden');
+  $('btnHideHud').textContent = hidden ? 'إظهار HUD' : 'إخفاء HUD';
+});
+
+// ============================================================
+// Floating mini panel: drag, collapse, close
+// ============================================================
+const mHead = mini.querySelector('.mHead');
+let mDrag = null;
+mHead.addEventListener('pointerdown', e => {
+  if (e.target.closest('button') || mini.classList.contains('in-pip')) return;
+  mDrag = { id: e.pointerId, dx: e.clientX - mini.offsetLeft, dy: e.clientY - mini.offsetTop };
+  try { mHead.setPointerCapture(e.pointerId); } catch (_) {}
+});
+mHead.addEventListener('pointermove', e => {
+  if (!mDrag || e.pointerId !== mDrag.id) return;
+  mini.style.right = 'auto';
+  mini.style.left = clamp(e.clientX - mDrag.dx, 0, Math.max(0, vw - mini.offsetWidth)) + 'px';
+  mini.style.top = clamp(e.clientY - mDrag.dy, 0, Math.max(0, vh - mini.offsetHeight)) + 'px';
+});
+['pointerup', 'pointercancel'].forEach(ev =>
+  mHead.addEventListener(ev, () => { mDrag = null; }));
+
+$('mCollapse').addEventListener('click', () => {
+  const c = mini.classList.toggle('collapsed');
+  $('mCollapse').textContent = c ? '+' : '–';
+});
+$('mClose').addEventListener('click', () => { TOGGLES.float.set(false); refreshToggles(); });
+
+// ============================================================
+// Pop-out window (Document Picture-in-Picture: Chrome/Edge على الحاسوب)
+// ============================================================
+async function popOut() {
+  if (pipWin) { pipWin.focus(); return; }
+  if (!('documentPictureInPicture' in window)) {
+    showHint('النافذة المنفصلة تعمل فقط في Chrome/Edge على الحاسوب. على الهاتف استخدم الزر العائم داخل الصفحة.', 6000);
+    return;
+  }
+  try {
+    if (!state.showMini) { TOGGLES.float.set(true); refreshToggles(); }
+    const pip = await window.documentPictureInPicture.requestWindow({ width: 300, height: 460 });
+    pipWin = pip;
+    pip.document.documentElement.lang = 'ar';
+    pip.document.documentElement.dir = 'rtl';
+    document.querySelectorAll('style').forEach(s => pip.document.head.appendChild(s.cloneNode(true)));
+    mini.classList.add('in-pip');
+    pip.document.body.appendChild(mini);
+    pip.addEventListener('pagehide', () => {
+      pipWin = null;
+      mini.classList.remove('in-pip');
+      viewport.appendChild(mini);
+      clampMini();
+    });
+  } catch (err) {
+    pipWin = null;
+    showHint('تعذّر فتح النافذة المنفصلة.', 4000);
+  }
+}
+$('btnPip').addEventListener('click', popOut);
+$('mPip').addEventListener('click', popOut);
+
+// ============================================================
+// Gyro aim (optional; iOS needs a permission request from a tap)
+// ============================================================
+let gyroBase = null;
+function onOrient(e) {
+  if (e.beta === null || e.gamma === null) return;
+  if (!gyroBase) gyroBase = { beta: e.beta, gamma: e.gamma };
+  state.gyroX = clamp((e.gamma - gyroBase.gamma) * 2, -vw / 2, vw / 2);
+  state.gyroY = clamp(-(e.beta - gyroBase.beta) * 2, -vh / 2, vh / 2);
+}
+const btnGyro = $('btnGyro');
+if (!window.DeviceOrientationEvent) { btnGyro.textContent = 'GYRO: N/A'; btnGyro.disabled = true; }
+btnGyro.addEventListener('click', async () => {
+  if (!state.gyroOn) {
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try { if ((await DeviceOrientationEvent.requestPermission()) !== 'granted') return; }
+      catch (_) { return; }
+    }
+    gyroBase = null;
+    window.addEventListener('deviceorientation', onOrient);
+    state.gyroOn = true;
+  } else {
+    window.removeEventListener('deviceorientation', onOrient);
+    state.gyroOn = false; state.gyroX = 0; state.gyroY = 0; gyroBase = null;
+  }
+  btnGyro.textContent = 'GYRO AIM: ' + (state.gyroOn ? 'ON' : 'OFF');
+  btnGyro.classList.toggle('on', state.gyroOn);
+});
+
+// ============================================================
+// HUD
+// ============================================================
+function updateHUD() {
+  $('hudShots').textContent = state.shots;
+  $('hudY').textContent = state.recoilY.toFixed(1);
+  $('hudComp').textContent = state.compY.toFixed(1);
+  $('hudNet').textContent = (state.recoilY + state.compY).toFixed(1);
+  $('hudAcc').textContent = state.shots > 0 ? Math.round(state.hits / state.shots * 100) + '%' : '—';
+  $('hudAuto').textContent = state.autoComp ? 'ON' : 'OFF';
+}
+
+// ============================================================
+// Boot (runs once)
+// ============================================================
+function boot() {
+  if (booted) return;
+  booted = true;
+  vw = viewport.clientWidth;
+  vh = viewport.clientHeight;
+  state.fireBtnX = 40;
+  state.fireBtnY = Math.max(0, vh - state.fireBtnSize - 40);
+  applyFireBtnPosition();
+  spawnTarget();
+  setBtnState('FREE');
+  showHint('اضغط ⚙ لفتح الإعدادات — زر 🔥 حركه ثم ثبته', 0);
+  requestAnimationFrame(loop);
+}
+if (document.readyState === 'complete') boot();
+else window.addEventListener('load', boot);
+</script>
+</body>
+</html>
