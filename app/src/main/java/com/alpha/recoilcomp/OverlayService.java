@@ -91,12 +91,20 @@ public class OverlayService extends Service {
             new Thread(() -> {
                 try {
                     if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
-                        // أمر الشل اللي بيحقن اللمسة في الشاشة
-                        Process process = Shizuku.newProcess(
-                            new String[]{"sh", "-c", "input tap " + x + " " + y}, 
-                            null, null
+                        
+                        // استخدام Reflection لتجاوز قفل الـ private access
+                        java.lang.reflect.Method method = Shizuku.class.getDeclaredMethod(
+                                "newProcess", 
+                                String[].class, String[].class, String.class
                         );
-                        process.waitFor();
+                        method.setAccessible(true);
+                        
+                        String[] cmd = new String[]{"sh", "-c", "input tap " + x + " " + y};
+                        Process process = (Process) method.invoke(null, cmd, null, null);
+                        
+                        if (process != null) {
+                            process.waitFor();
+                        }
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
