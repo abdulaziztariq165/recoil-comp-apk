@@ -553,6 +553,14 @@ function fireOneShot() {
   spawnMark(p.x, p.y, hit);
   state.pendY += state.vPerShot;
   state.pendX += state.hBias;
+
+  // ==========================================
+  // حقن اللمسة الفعلية عبر Shizuku
+  // ==========================================
+  if (window.NativeOverlay) {
+      // بنبعت إحداثيات المكان اللي بنضرب فيه بالظبط
+      window.NativeOverlay.injectTap(Math.round(p.x), Math.round(p.y));
+  }
 }
 
 const fireSources = new Set();
@@ -780,14 +788,12 @@ $('mClose').addEventListener('click', () => { TOGGLES.float.set(false); refreshT
 // ============================================================
 function toggleOverlay() {
   if (window.AndroidBridge) {
-    // التطبيق شغال داخل APK والجسر موجود
     if (state.showMini) {
       window.AndroidBridge.startOverlay();
     } else {
       window.AndroidBridge.stopOverlay();
     }
   } else {
-    // شغال في متصفح عادي (لا يوجد Overlay)
     showHint('هذه الميزة تعمل فقط داخل التطبيق (APK)', 3000);
   }
 }
