@@ -2,6 +2,7 @@ package com.alpha.recoilcomp;
 
 import android.annotation.SuppressLint;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -13,12 +14,15 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import rikka.shizuku.Shizuku;
 
 public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
     private static final int OVERLAY_PERMISSION_REQ_CODE = 1234;
+    private static final int SHIZUKU_PERMISSION_REQ_CODE = 1235;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -29,6 +33,9 @@ public class MainActivity extends AppCompatActivity {
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         );
+
+        // طلب صلاحية Shizuku عند بدء التشغيل
+        requestShizukuPermission();
 
         webView = new WebView(this);
         WebSettings s = webView.getSettings();
@@ -43,10 +50,7 @@ public class MainActivity extends AppCompatActivity {
 
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.setWebViewClient(new WebViewClient());
-        
-        // ربط جسر الـ Java بالـ HTML
         webView.addJavascriptInterface(new WebAppInterface(), "AndroidBridge");
-        
         webView.loadUrl("file:///android_asset/index.html");
 
         setContentView(webView);
@@ -60,10 +64,29 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void requestShizukuPermission() {
+        if (Shizuku.isPreV11() || Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) return;
+        if (Shizuku.shouldShowRequestPermissionRationale()) {
+            Toast.makeText(this, "Please grant Shizuku permission for touch injection.", Toast.LENGTH_LONG).show();
+        }
+        Shizuku.requestPermission(SHIZUKU_PERMISSION_REQ_CODE);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == SHIZUKU_PERMISSION_REQ_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Shizuku Permission Granted!", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Shizuku Permission Denied. Touch injection will fail.", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
     @Override
     public void onBackPressed() { }
 
-    // الكلاس ده هو اللي بيسمح للـ HTML إنه يكلم الجافا
     public class WebAppInterface {
         @JavascriptInterface
         public void startOverlay() {
@@ -91,7 +114,7 @@ public class MainActivity extends AppCompatActivity {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
                 launchOverlayService();
             } else {
-                Toast.makeText(this, "Permission Denied", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Overlay Permission Denied", Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -103,8 +126,7 @@ public class MainActivity extends AppCompatActivity {
         } else {
             startService(intent);
         }
-        Toast.makeText(this, "Overlay Started!", Toast.LENGTH_SHORT).show();
-        // نصغر التطبيق عشان تشوف الـ Overlay
+        Toast.makeText(this, "Overlay Started with Shizuku Injection!", Toast.LENGTH_SHORT).show();
         moveTaskToBack(true); 
     }
 }
