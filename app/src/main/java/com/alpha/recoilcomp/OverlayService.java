@@ -5,19 +5,19 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.PixelFormat;
 import android.os.Build;
 import android.os.IBinder;
 import android.view.Gravity;
-import android.view.LayoutInflater;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.FrameLayout;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import rikka.shizuku.Shizuku;
 
 public class OverlayService extends Service {
 
@@ -41,8 +41,8 @@ public class OverlayService extends Service {
         }
 
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Recoil Comp Overlay")
-                .setContentText("Running over other apps")
+                .setContentTitle("Recoil Comp Shizuku")
+                .setContentText("Touch Injection Active")
                 .setSmallIcon(android.R.drawable.ic_menu_compass)
                 .build();
         startForeground(1, notification);
@@ -51,7 +51,6 @@ public class OverlayService extends Service {
     private void createOverlay() {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         
-        // شفاف وبيتحرك
         int layoutType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 : WindowManager.LayoutParams.TYPE_PHONE;
@@ -61,25 +60,49 @@ public class OverlayService extends Service {
                 WindowManager.LayoutParams.MATCH_PARENT,
                 layoutType,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL |
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, // عشان الاحداثيات تظبط
                 PixelFormat.TRANSLUCENT);
         
         params.gravity = Gravity.TOP | Gravity.START;
         params.x = 0;
         params.y = 0;
 
-        // الـ Overlay عبارة عن WebView شفاف بيحمل نفس الـ HTML
         WebView overlayWebView = new WebView(this);
-        overlayWebView.setBackgroundColor(0x00000000); // شفاف
+        overlayWebView.setBackgroundColor(0x00000000);
         overlayWebView.getSettings().setJavaScriptEnabled(true);
         overlayWebView.getSettings().setDomStorageEnabled(true);
         overlayWebView.setWebViewClient(new WebViewClient());
+        
+        // ربط جسر الشوزوكو بالـ HTML
+        overlayWebView.addJavascriptInterface(new ShizukuOverlayBridge(), "NativeOverlay");
+        
         overlayWebView.loadUrl("file:///android_asset/index.html");
 
-        // عشان نمسك الشاشة ونحرك الـ Overlay لو حبينا (اختياري، حالياً ثابت)
         overlayView = overlayWebView;
-        
         windowManager.addView(overlayView, params);
+    }
+
+    // ده الكلاس اللي هيستقبل أوامر الضغط من الـ JavaScript
+    public class ShizukuOverlayBridge {
+        @JavascriptInterface
+        public void injectTap(final int x, final int y) {
+            // ننفذ في ثريد منفصل عشان منعملش بلوك للواجهة
+            new Thread(() -> {
+                try {
+                    if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                        // أمر الشل اللي بيحقن اللمسة في الشاشة
+                        Process process = Shizuku.newProcess(
+                            new String[]{"sh", "-c", "input tap " + x + " " + y}, 
+                            null, null
+                        );
+                        process.waitFor();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }).start();
+        }
     }
 
     @Nullable
