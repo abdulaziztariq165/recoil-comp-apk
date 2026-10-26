@@ -23,6 +23,7 @@ public class MainActivity extends AppCompatActivity {
     private WebView webView;
     private static final int OVERLAY_PERMISSION_REQ_CODE = 1234;
     private static final int SHIZUKU_PERMISSION_REQ_CODE = 1235;
+    private static final int NOTIFICATION_PERMISSION_REQ_CODE = 1236;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -34,7 +35,14 @@ public class MainActivity extends AppCompatActivity {
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         );
 
-        // طلب صلاحية Shizuku عند بدء التشغيل
+        // طلب صلاحية الإشعارات (أندرويد 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQ_CODE);
+            }
+        }
+
+        // طلب صلاحية Shizuku بأمان
         requestShizukuPermission();
 
         webView = new WebView(this);
@@ -65,11 +73,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void requestShizukuPermission() {
-        if (Shizuku.isPreV11() || Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) return;
-        if (Shizuku.shouldShowRequestPermissionRationale()) {
-            Toast.makeText(this, "Please grant Shizuku permission for touch injection.", Toast.LENGTH_LONG).show();
+        try {
+            // نتأكد الأول إن Shizuku شغال ومتصل
+            if (!Shizuku.pingBinder()) return;
+            if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) return;
+            
+            if (Shizuku.shouldShowRequestPermissionRationale()) {
+                Toast.makeText(this, "Please grant Shizuku permission for touch injection.", Toast.LENGTH_LONG).show();
+            }
+            Shizuku.requestPermission(SHIZUKU_PERMISSION_REQ_CODE);
+        } catch (Throwable t) {
+            // لو Shizuku مش شغال أو مش متثبت، نتجاهل الخطأ عشان التطبيق ما يكرشش
+            t.printStackTrace();
         }
-        Shizuku.requestPermission(SHIZUKU_PERMISSION_REQ_CODE);
     }
 
     @Override
@@ -79,7 +95,7 @@ public class MainActivity extends AppCompatActivity {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Toast.makeText(this, "Shizuku Permission Granted!", Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, "Shizuku Permission Denied. Touch injection will fail.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Shizuku Permission Denied.", Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -126,7 +142,7 @@ public class MainActivity extends AppCompatActivity {
         } else {
             startService(intent);
         }
-        Toast.makeText(this, "Overlay Started with Shizuku Injection!", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Overlay Started!", Toast.LENGTH_SHORT).show();
         moveTaskToBack(true); 
     }
 }
