@@ -28,11 +28,11 @@ public class OverlayService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        startForegroundService();
+        startForegroundServiceSafely();
         createOverlay();
     }
 
-    private void startForegroundService() {
+    private void startForegroundServiceSafely() {
         String CHANNEL_ID = "overlay_channel";
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Overlay Service", NotificationManager.IMPORTANCE_LOW);
@@ -45,7 +45,11 @@ public class OverlayService extends Service {
                 .setContentText("Touch Injection Active")
                 .setSmallIcon(android.R.drawable.ic_menu_compass)
                 .build();
-        startForeground(1, notification);
+        try {
+            startForeground(1, notification);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void createOverlay() {
@@ -61,7 +65,7 @@ public class OverlayService extends Service {
                 layoutType,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL |
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, // عشان الاحداثيات تظبط
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT);
         
         params.gravity = Gravity.TOP | Gravity.START;
@@ -74,25 +78,24 @@ public class OverlayService extends Service {
         overlayWebView.getSettings().setDomStorageEnabled(true);
         overlayWebView.setWebViewClient(new WebViewClient());
         
-        // ربط جسر الشوزوكو بالـ HTML
         overlayWebView.addJavascriptInterface(new ShizukuOverlayBridge(), "NativeOverlay");
-        
         overlayWebView.loadUrl("file:///android_asset/index.html");
 
         overlayView = overlayWebView;
-        windowManager.addView(overlayView, params);
+        
+        try {
+            windowManager.addView(overlayView, params);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
-    // ده الكلاس اللي هيستقبل أوامر الضغط من الـ JavaScript
     public class ShizukuOverlayBridge {
         @JavascriptInterface
         public void injectTap(final int x, final int y) {
-            // ننفذ في ثريد منفصل عشان منعملش بلوك للواجهة
             new Thread(() -> {
                 try {
                     if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
-                        
-                        // استخدام Reflection لتجاوز قفل الـ private access
                         java.lang.reflect.Method method = Shizuku.class.getDeclaredMethod(
                                 "newProcess", 
                                 String[].class, String[].class, String.class
@@ -121,7 +124,11 @@ public class OverlayService extends Service {
     public void onDestroy() {
         super.onDestroy();
         if (overlayView != null && windowManager != null) {
-            windowManager.removeView(overlayView);
+            try {
+                windowManager.removeView(overlayView);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     }
 }
