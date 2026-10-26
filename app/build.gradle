@@ -18,7 +18,6 @@ android {
     }
 }
 
-// السطور دي هي اللي بتحل مشكلة الـ Duplicate class
 configurations.all {
     resolutionStrategy {
         force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
@@ -29,4 +28,6 @@ configurations.all {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'dev.rikka.shizuku:api:13.1.5'
+    implementation 'dev.rikka.shizuku:provider:13.1.5'
 }
