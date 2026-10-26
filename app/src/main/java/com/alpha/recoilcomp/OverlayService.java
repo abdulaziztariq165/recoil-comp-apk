@@ -59,6 +59,7 @@ public class OverlayService extends Service {
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 : WindowManager.LayoutParams.TYPE_PHONE;
 
+        // إعدادات عشان اللمس يعدي للعبة
         params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -73,7 +74,7 @@ public class OverlayService extends Service {
         params.y = 0;
 
         WebView overlayWebView = new WebView(this);
-        overlayWebView.setBackgroundColor(0x00000000); // شفاف
+        overlayWebView.setBackgroundColor(0x00000000);
         overlayWebView.getSettings().setJavaScriptEnabled(true);
         overlayWebView.getSettings().setDomStorageEnabled(true);
         overlayWebView.setWebViewClient(new WebViewClient());
