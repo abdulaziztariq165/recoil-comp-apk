@@ -8,7 +8,7 @@
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; overflow: hidden; }
   
-  /* الخلفية الافتراضية للتطبيق (رمادي غامق) */
+  /* الخلفية الرمادية للتطبيق الأساسي */
   body {
     background: linear-gradient(180deg, #1a2332 0%, #0d1117 100%) !important; 
     color: #c9d1d9;
@@ -19,20 +19,19 @@
 
   #viewport {
     position: fixed; inset: 0;
-    background: transparent; /* شفاف عشان ياخد لون الـ body */
+    background: transparent;
     overflow: hidden;
   }
 
-  /* كلاس الـ Overlay: بيشتغل أوتوماتيك لما يفتح فوق اللعبة */
+  /* لو شغال Overlay، الخلفية تختفي واللمس يعدي */
   body.in-overlay {
     background: transparent !important;
   }
   body.in-overlay #viewport {
-    pointer-events: none; /* يخلي اللمس يعدي للعبة */
+    pointer-events: none; 
   }
-  /* الزراير بس اللي بتستقبل اللمس في وضع الـ Overlay */
   body.in-overlay #fireBtn, body.in-overlay #configFab, 
-  body.in-overlay #miniPanel, body.in-overlay #configPanel {
+  body.in-overlay #miniPanel, body.in-overlay #configPanel, body.in-overlay #hud {
     pointer-events: auto;
   }
 
@@ -52,7 +51,6 @@
   }
   #viewport.hide-cross #crosshair { opacity: 0; }
 
-  /* الأزرار العائمة */
   #fireBtn {
     position: absolute; width: 96px; height: 96px; border-radius: 50%;
     background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.5);
@@ -111,7 +109,6 @@
   .panelBtn.on { background: rgba(51,255,102,0.45); color: #0d1117; }
   .panelBtn.warn { background: rgba(255,80,80,0.1); border-color: rgba(255,80,80,0.5); color: #ff5050; }
 
-  /* القائمة العائمة (Mini Panel) */
   #miniPanel {
     position: absolute; top: 130px; right: 14px; width: 230px;
     background: rgba(13,17,23,0.96); border: 1px solid rgba(51,255,102,0.55);
@@ -129,18 +126,20 @@
   .mBtn { width: 28px; height: 28px; border-radius: 6px; background: rgba(51,255,102,0.1); border: 1px solid rgba(51,255,102,0.4); color: #33ff66; }
   #miniPanel .mBody { 
     padding: 2px 12px 12px; 
-    max-height: 60vh; /* تحديد ارتفاع عشان ينزل سكرول */
-    overflow-y: auto; /* تفعيل السكرول */
-    touch-action: pan-y; /* السماح بالسحب لتحت */
+    max-height: 60vh; 
+    overflow-y: auto; 
+    touch-action: pan-y; 
   }
   #miniPanel.collapsed .mBody { display: none; }
 
+  /* لوحة البيانات (HUD) - بقت قابلة للسحب */
   #hud {
     position: absolute; top: 14px; right: 14px; background: rgba(0,0,0,0.6);
     padding: 10px 14px; border-radius: 8px; font-size: 11px; font-family: monospace;
     line-height: 1.5; direction: ltr; text-align: left; border: 1px solid rgba(51,255,102,0.3);
-    pointer-events: none;
+    cursor: grab; touch-action: none;
   }
+  #hud:active { cursor: grabbing; }
   #hud .row { display: flex; justify-content: space-between; gap: 10px; }
   #hud .label { color: #8b949e; }
   #hud .val { color: #33ff66; font-weight: 600; }
@@ -174,11 +173,11 @@
     <button class="panelBtn" data-toggle="autoComp"></button>
     <button class="panelBtn" data-toggle="cross"></button>
     <button class="panelBtn" data-toggle="target"></button>
-    <button class="panelBtn action-btn btn-pip">تفعيل الشاشة العائمة ⧉</button>
-    <button class="panelBtn action-btn btn-gyro">GYRO AIM: OFF</button>
-    <button class="panelBtn action-btn btn-move">وضع النقل / MOVE</button>
-    <button class="panelBtn action-btn btn-reset">إعادة تعيين / RESET</button>
-    <button class="panelBtn warn action-btn btn-hide-hud">إخفاء HUD</button>
+    <button class="panelBtn btn-pip">تفعيل الشاشة العائمة ⧉</button>
+    <button class="panelBtn btn-gyro">GYRO AIM: OFF</button>
+    <button class="panelBtn btn-move">وضع النقل / MOVE</button>
+    <button class="panelBtn btn-reset">إعادة تعيين / RESET</button>
+    <button class="panelBtn warn btn-hide-hud">إخفاء HUD</button>
   </div>
 
   <!-- القائمة العائمة -->
@@ -194,11 +193,11 @@
       <div id="miniSliders"></div>
       <button class="panelBtn" data-toggle="cross"></button>
       <button class="panelBtn" data-toggle="target"></button>
-      <button class="panelBtn action-btn btn-pip">تفعيل الشاشة العائمة ⧉</button>
-      <button class="panelBtn action-btn btn-gyro">GYRO AIM: OFF</button>
-      <button class="panelBtn action-btn btn-move">وضع النقل / MOVE</button>
-      <button class="panelBtn action-btn btn-reset">إعادة تعيين / RESET</button>
-      <button class="panelBtn warn action-btn btn-hide-hud">إخفاء HUD</button>
+      <button class="panelBtn btn-pip">تفعيل الشاشة العائمة ⧉</button>
+      <button class="panelBtn btn-gyro">GYRO AIM: OFF</button>
+      <button class="panelBtn btn-move">وضع النقل / MOVE</button>
+      <button class="panelBtn btn-reset">إعادة تعيين / RESET</button>
+      <button class="panelBtn warn btn-hide-hud">إخفاء HUD</button>
     </div>
   </div>
 
@@ -214,7 +213,7 @@
 <script>
 'use strict';
 
-// كشف وضع الـ Overlay (لو شغال من الـ Service)
+// كشف وضع الـ Overlay
 if (window.NativeOverlay) {
     document.body.classList.add('in-overlay');
 }
@@ -383,33 +382,39 @@ document.querySelectorAll('.btn-pip').forEach(btn => btn.addEventListener('click
   else alert('هذه الميزة تعمل فقط داخل التطبيق (APK)');
 }));
 
-// القائمة العائمة والسحب
+// القائمة العائمة (سحب)
 const mHead = mini.querySelector('.mHead');
-let isDragging = false;
+let mDrag = null;
 mHead.addEventListener('pointerdown', e => {
   if (e.target.closest('button')) return;
-  isDragging = true;
-  const r = mini.getBoundingClientRect();
-  mDrag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+  mDrag = { id: e.pointerId, dx: e.clientX - mini.offsetLeft, dy: e.clientY - mini.offsetTop };
   mHead.setPointerCapture(e.pointerId);
 });
 mHead.addEventListener('pointermove', e => {
-  if (!isDragging) return;
+  if (!mDrag || e.pointerId !== mDrag.id) return;
   mini.style.right = 'auto';
   mini.style.left = clamp(e.clientX - mDrag.dx, 0, vw - mini.offsetWidth) + 'px';
   mini.style.top = clamp(e.clientY - mDrag.dy, 0, vh - mini.offsetHeight) + 'px';
 });
-['pointerup', 'pointercancel'].forEach(ev => mHead.addEventListener(ev, () => isDragging = false));
+['pointerup', 'pointercancel'].forEach(ev => mHead.addEventListener(ev, () => mDrag = null));
 
-$('mPip').addEventListener('click', () => {
-  if (window.AndroidBridge) window.AndroidBridge.startOverlay();
-});
-$('mCollapse').addEventListener('click', () => {
-  const c = mini.classList.toggle('collapsed');
-  $('mCollapse').textContent = c ? '+' : '–';
-});
+$('mPip').addEventListener('click', () => { if (window.AndroidBridge) window.AndroidBridge.startOverlay(); });
+$('mCollapse').addEventListener('click', () => { const c = mini.classList.toggle('collapsed'); $('mCollapse').textContent = c ? '+' : '–'; });
 $('mClose').addEventListener('click', () => { mini.classList.remove('show'); });
-$('btnPip').addEventListener('click', () => { mini.classList.add('show'); });
+
+// لوحة البيانات HUD (سحب)
+let hudDrag = null;
+hud.addEventListener('pointerdown', e => {
+    hudDrag = { id: e.pointerId, dx: e.clientX - hud.offsetLeft, dy: e.clientY - hud.offsetTop };
+    hud.setPointerCapture(e.pointerId);
+});
+hud.addEventListener('pointermove', e => {
+    if (!hudDrag || e.pointerId !== hudDrag.id) return;
+    hud.style.right = 'auto';
+    hud.style.left = (e.clientX - hudDrag.dx) + 'px';
+    hud.style.top = (e.clientY - hudDrag.dy) + 'px';
+});
+['pointerup', 'pointercancel'].forEach(ev => hud.addEventListener(ev, () => hudDrag = null));
 
 // الجيروسكوب
 let gyroBase = null, lastGyroInject = 0;
