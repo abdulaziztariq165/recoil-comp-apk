@@ -73,7 +73,7 @@ public class OverlayService extends Service {
         params.y = 0;
 
         WebView overlayWebView = new WebView(this);
-        overlayWebView.setBackgroundColor(0x00000000);
+        overlayWebView.setBackgroundColor(0x00000000); // شفاف
         overlayWebView.getSettings().setJavaScriptEnabled(true);
         overlayWebView.getSettings().setDomStorageEnabled(true);
         overlayWebView.setWebViewClient(new WebViewClient());
@@ -97,21 +97,29 @@ public class OverlayService extends Service {
                 try {
                     if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
                         java.lang.reflect.Method method = Shizuku.class.getDeclaredMethod(
-                                "newProcess", 
-                                String[].class, String[].class, String.class
-                        );
+                                "newProcess", String[].class, String[].class, String.class);
                         method.setAccessible(true);
-                        
                         String[] cmd = new String[]{"sh", "-c", "input tap " + x + " " + y};
                         Process process = (Process) method.invoke(null, cmd, null, null);
-                        
-                        if (process != null) {
-                            process.waitFor();
-                        }
+                        if (process != null) process.waitFor();
                     }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+                } catch (Exception e) { e.printStackTrace(); }
+            }).start();
+        }
+
+        @JavascriptInterface
+        public void injectSwipe(final int x1, final int y1, final int x2, final int y2, final int duration) {
+            new Thread(() -> {
+                try {
+                    if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                        java.lang.reflect.Method method = Shizuku.class.getDeclaredMethod(
+                                "newProcess", String[].class, String[].class, String.class);
+                        method.setAccessible(true);
+                        String[] cmd = new String[]{"sh", "-c", "input swipe " + x1 + " " + y1 + " " + x2 + " " + y2 + " " + duration};
+                        Process process = (Process) method.invoke(null, cmd, null, null);
+                        if (process != null) process.waitFor();
+                    }
+                } catch (Exception e) { e.printStackTrace(); }
             }).start();
         }
     }
@@ -124,11 +132,7 @@ public class OverlayService extends Service {
     public void onDestroy() {
         super.onDestroy();
         if (overlayView != null && windowManager != null) {
-            try {
-                windowManager.removeView(overlayView);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            try { windowManager.removeView(overlayView); } catch (Exception e) { e.printStackTrace(); }
         }
     }
 }
