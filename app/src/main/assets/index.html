@@ -206,7 +206,7 @@
   .panelBtn.on { background: rgba(51,255,102,0.45); color: #0d1117; }
 
   /* ==========================================================
-     Floating mini panel (قابلة للسحب، وتُنقل لنافذة منفصلة)
+     Floating mini panel (قابلة للسحب)
      ========================================================== */
   #miniPanel {
     position: absolute; top: 130px; right: 14px;
@@ -234,13 +234,6 @@
   }
   #miniPanel .mBody { padding: 2px 12px 12px; touch-action: pan-y; }
   #miniPanel.collapsed .mBody { display: none; }
-  #miniPanel.in-pip {
-    position: static; display: block; width: 100%; height: 100vh;
-    border: 0; border-radius: 0; box-shadow: none; overflow-y: auto;
-  }
-  #miniPanel.in-pip .mHead { cursor: default; }
-  #miniPanel.in-pip .mCollapse, #miniPanel.in-pip .mClose { display: none; }
-  #miniPanel.in-pip.collapsed .mBody { display: block; }
 
   /* HUD */
   #hud {
@@ -300,7 +293,7 @@
     <button class="panelBtn" data-toggle="cross"></button>
     <button class="panelBtn" data-toggle="target"></button>
     <button class="panelBtn" data-toggle="float"></button>
-    <button class="panelBtn" id="btnPip">نافذة منفصلة / POP OUT ⧉</button>
+    <button class="panelBtn" id="btnPip">تفعيل الشاشة العائمة (Overlay) ⧉</button>
     <button class="panelBtn" id="btnGyro">GYRO AIM: OFF</button>
     <button class="panelBtn" id="btnMove">وضع النقل / MOVE</button>
     <button class="panelBtn" id="btnReset">إعادة تعيين / RESET</button>
@@ -503,7 +496,7 @@ function applyFireBtnPosition() {
   fireBtn.classList.toggle('pill-below', state.fireBtnY < 60);
 }
 function clampMini() {
-  if (mini.classList.contains('in-pip') || !mini.style.left) return;
+  if (!mini.style.left) return;
   mini.style.left = clamp(mini.offsetLeft, 0, Math.max(0, vw - mini.offsetWidth)) + 'px';
   mini.style.top = clamp(mini.offsetTop, 0, Math.max(0, vh - mini.offsetHeight)) + 'px';
 }
@@ -548,8 +541,6 @@ function spawnMark(x, y, isHit) {
 // Firing
 // ============================================================
 function fireOneShot() {
-  // The bullet goes where the crosshair is at trigger pull; the kick comes after.
-  // Works the same whether the crosshair / target are visible or hidden.
   const p = crossScreen();
   state.shots++;
   let hit = false;
@@ -651,7 +642,7 @@ function setBtnState(s) {
   btnMove.classList.toggle('on', s === 'MOVING');
   btnMove.textContent = s === 'MOVING' ? 'إنهاء النقل / DONE MOVING' : 'وضع النقل / MOVE';
   if (s === 'MOVING') showHint('اسحب الزر 🔥 إلى مكانه — ثم اضغط "تثبيت" فوقه', 0);
-  else if (s === 'LOCKED') showHint('الزر مثبّت — اضغط مطولاً على 🔥 للإطلاق (أو مفتاح المسافة)', 3000);
+  else if (s === 'LOCKED') showHint('الزر مثبّت — اضغط مطولاً على 🔥 للإطلاق', 3000);
   else showHint('الزر حر — اضغط "وضع النقل" لتحريكه ثم تثبيته', 0);
 }
 
@@ -710,7 +701,7 @@ window.addEventListener('keyup', e => { if (e.code === 'Space') removeSource('ke
 window.addEventListener('blur', () => { fireSources.clear(); stopFiring(); });
 
 // ============================================================
-// Aim by dragging the background (also closes the main panel)
+// Aim by dragging the background
 // ============================================================
 let aimPtr = null, lastPX = 0, lastPY = 0;
 viewport.addEventListener('pointerdown', e => {
@@ -765,7 +756,7 @@ $('btnHideHud').addEventListener('click', () => {
 const mHead = mini.querySelector('.mHead');
 let mDrag = null;
 mHead.addEventListener('pointerdown', e => {
-  if (e.target.closest('button') || mini.classList.contains('in-pip')) return;
+  if (e.target.closest('button')) return;
   mDrag = { id: e.pointerId, dx: e.clientX - mini.offsetLeft, dy: e.clientY - mini.offsetTop };
   try { mHead.setPointerCapture(e.pointerId); } catch (_) {}
 });
@@ -785,39 +776,27 @@ $('mCollapse').addEventListener('click', () => {
 $('mClose').addEventListener('click', () => { TOGGLES.float.set(false); refreshToggles(); });
 
 // ============================================================
-// Pop-out window (Document Picture-in-Picture: Chrome/Edge على الحاسوب)
+// OVERLAY TRIGGER (WebView to Java Bridge)
 // ============================================================
-async function popOut() {
-  if (pipWin) { pipWin.focus(); return; }
-  if (!('documentPictureInPicture' in window)) {
-    showHint('النافذة المنفصلة تعمل فقط في Chrome/Edge على الحاسوب. على الهاتف استخدم الزر العائم داخل الصفحة.', 6000);
-    return;
-  }
-  try {
-    if (!state.showMini) { TOGGLES.float.set(true); refreshToggles(); }
-    const pip = await window.documentPictureInPicture.requestWindow({ width: 300, height: 460 });
-    pipWin = pip;
-    pip.document.documentElement.lang = 'ar';
-    pip.document.documentElement.dir = 'rtl';
-    document.querySelectorAll('style').forEach(s => pip.document.head.appendChild(s.cloneNode(true)));
-    mini.classList.add('in-pip');
-    pip.document.body.appendChild(mini);
-    pip.addEventListener('pagehide', () => {
-      pipWin = null;
-      mini.classList.remove('in-pip');
-      viewport.appendChild(mini);
-      clampMini();
-    });
-  } catch (err) {
-    pipWin = null;
-    showHint('تعذّر فتح النافذة المنفصلة.', 4000);
+function toggleOverlay() {
+  if (window.AndroidBridge) {
+    // التطبيق شغال داخل APK والجسر موجود
+    if (state.showMini) {
+      window.AndroidBridge.startOverlay();
+    } else {
+      window.AndroidBridge.stopOverlay();
+    }
+  } else {
+    // شغال في متصفح عادي (لا يوجد Overlay)
+    showHint('هذه الميزة تعمل فقط داخل التطبيق (APK)', 3000);
   }
 }
-$('btnPip').addEventListener('click', popOut);
-$('mPip').addEventListener('click', popOut);
+
+$('btnPip').addEventListener('click', toggleOverlay);
+$('mPip').addEventListener('click', toggleOverlay);
 
 // ============================================================
-// Gyro aim (optional; iOS needs a permission request from a tap)
+// Gyro aim
 // ============================================================
 let gyroBase = null;
 function onOrient(e) {
